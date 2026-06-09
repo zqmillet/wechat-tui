@@ -1,0 +1,1 @@
+"""Data models for contacts and messages."""
