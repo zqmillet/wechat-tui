@@ -13,6 +13,34 @@ from textual.widgets import Input, Static
 from ...models.contact import Contact, ContactType
 
 
+def visual_width(text: str) -> int:
+    """Calculate visual width of text (Chinese chars = 2, ASCII = 1)."""
+    width = 0
+    for char in text:
+        # Chinese and fullwidth chars take 2 columns
+        if '一' <= char <= '鿿' or '　' <= char <= '〿':
+            width += 2
+        else:
+            width += 1
+    return width
+
+
+def truncate_by_visual_width(text: str, max_width: int) -> str:
+    """Truncate text to fit within max visual width, add '...' if truncated."""
+    # Reserve 3 chars width for '...'
+    available_width = max_width - 3
+    current_width = 0
+    result = ""
+    for char in text:
+        char_width = 2 if '一' <= char <= '鿿' or '　' <= char <= '〿' else 1
+        if current_width + char_width > available_width:
+            return result + "..."
+        result += char
+        current_width += char_width
+    # No truncation needed
+    return text
+
+
 class ContactItem(Static):
     """A single contact item in the list - clickable Static widget."""
 
@@ -50,8 +78,12 @@ class ContactItem(Static):
         if contact.contact_type == ContactType.MP:
             prefix = "[公]"
         name = contact.display_name
-        if len(name) > 16:
-            name = name[:13] + "..."
+        # Ensure name is not empty, fallback to user_id
+        if not name or name.strip() == "":
+            name = contact.user_id[:20] if contact.user_id else "未知"
+        # Truncate by visual width: sidebar ~30, prefix ~4, padding ~2
+        # Leave ~20 visual width for name
+        name = truncate_by_visual_width(name, 20)
         if contact.unread_count > 0:
             label_text = f"{prefix} {name} [{contact.unread_count}]"
         else:

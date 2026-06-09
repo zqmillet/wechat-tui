@@ -153,8 +153,8 @@ class MainScreen(Screen):
     }
 
     MainScreen #sidebar {
-        width: 22;
-        min-width: 18;
+        width: 30;
+        min-width: 25;
         dock: left;
         background: #161b22;
         border-right: solid #30363d;
