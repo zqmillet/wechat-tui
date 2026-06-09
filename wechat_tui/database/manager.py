@@ -35,6 +35,7 @@ class MessageRecord(Base):
     file_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     file_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     file_size: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    local_file_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     is_sent: Mapped[int] = mapped_column(Integer, default=0)
     is_read: Mapped[int] = mapped_column(Integer, default=0)
     actual_sender_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -66,11 +67,34 @@ class DatabaseManager:
 
         # Create tables if they don't exist
         Base.metadata.create_all(self.engine)
+
+        # Run migration to add local_file_path column if needed
+        self._migrate_add_local_file_path()
+
         logger.info(f"Database initialized at {self.db_path}")
 
     def _ensure_dir(self) -> None:
         """Ensure database directory exists."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _migrate_add_local_file_path(self) -> None:
+        """Add local_file_path column if it doesn't exist."""
+        from sqlalchemy import text
+
+        try:
+            with self.engine.connect() as conn:
+                # Check if column exists
+                result = conn.execute(text("PRAGMA table_info(messages)"))
+                columns = [row[1] for row in result.fetchall()]
+
+                if "local_file_path" not in columns:
+                    logger.info("Adding local_file_path column to messages table")
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN local_file_path VARCHAR"))
+                    conn.commit()
+                    logger.info("Migration completed successfully")
+        except Exception as e:
+            # Column may already exist or other issue
+            logger.debug(f"Migration check result: {e}")
 
     def save_message(
         self,
@@ -87,6 +111,7 @@ class DatabaseManager:
         file_url: Optional[str] = None,
         file_name: Optional[str] = None,
         file_size: Optional[int] = None,
+        local_file_path: Optional[str] = None,
         actual_sender_id: Optional[str] = None,
         actual_sender_name: Optional[str] = None,
     ) -> None:
@@ -107,6 +132,7 @@ class DatabaseManager:
                 file_url=file_url,
                 file_name=file_name,
                 file_size=file_size,
+                local_file_path=local_file_path,
                 actual_sender_id=actual_sender_id,
                 actual_sender_name=actual_sender_name,
             )
@@ -144,6 +170,7 @@ class DatabaseManager:
                     "file_url": r.file_url,
                     "file_name": r.file_name,
                     "file_size": r.file_size,
+                    "local_file_path": r.local_file_path,
                     "actual_sender_id": r.actual_sender_id,
                     "actual_sender_name": r.actual_sender_name,
                 })
@@ -223,6 +250,7 @@ class DatabaseManager:
                     "file_url": r.file_url,
                     "file_name": r.file_name,
                     "file_size": r.file_size,
+                    "local_file_path": r.local_file_path,
                     "actual_sender_id": r.actual_sender_id,
                     "actual_sender_name": r.actual_sender_name,
                     "sender_name": r.sender_name,

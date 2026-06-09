@@ -36,9 +36,10 @@ class Message:
 
     # Optional fields
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
-    file_url: Optional[str] = None  # For media files
+    file_url: Optional[str] = None  # For media files (may expire)
     file_name: Optional[str] = None
     file_size: Optional[int] = None
+    local_file_path: Optional[str] = None  # Local storage path (persistent)
     is_sent: bool = False  # True if sent by current user
     is_read: bool = False
 

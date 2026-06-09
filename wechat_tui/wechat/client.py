@@ -14,6 +14,8 @@ import pyqrcode
 from ..models.contact import Contact, ContactList, ContactType
 from ..models.message import ChatSession, Message, MessageType
 from ..database import DatabaseManager
+from ..utils.config import AppConfig
+from ..utils.image_downloader import ImageDownloader
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +62,13 @@ class WeChatClient:
     _logged_in: bool = False
     _bot: Optional[Bot] = None
     _qr_callback_internal: Optional[Callable] = None
+    _config: Optional[AppConfig] = None
+    _image_downloader: Optional[ImageDownloader] = None
 
     def __post_init__(self) -> None:
-        """Initialize - no need to preload sessions, we use name-based lookup."""
-        pass
+        """Initialize config and image downloader."""
+        self._config = AppConfig()
+        self._image_downloader = ImageDownloader(self._config.image_dir)
 
     def _set_state(self, state: ClientState) -> None:
         """Update client state and notify."""
@@ -323,6 +328,32 @@ class WeChatClient:
                 sender_name = msg.sender.name if hasattr(msg, 'sender') and msg.sender else None
                 receiver_name = msg.receiver.name if hasattr(msg, 'receiver') and msg.receiver else self.user_name
 
+                # Download image if it's a Picture message
+                local_file_path = None
+                file_url = None
+                file_name = None
+                file_size = None
+
+                if msg.type == 'Picture' and self._config.auto_download_images:
+                    try:
+                        chat_id_temp = msg.sender.user_name if not is_sent else msg.receiver.user_name
+                        timestamp_temp = msg.create_time.timestamp() if hasattr(msg, 'create_time') else 0
+                        msg_id_temp = str(msg.id) if hasattr(msg, 'id') else f"wxpy_{int(timestamp_temp)}"
+
+                        logger.info(f"Downloading image: chat_id={chat_id_temp}, msg_id={msg_id_temp}")
+                        local_file_path = self._image_downloader.download_image(
+                            msg, chat_id_temp, timestamp_temp, msg_id_temp
+                        )
+
+                        # Get file metadata from wxpy message
+                        file_name = getattr(msg, 'file_name', None)
+                        file_size = getattr(msg, 'file_size', None)
+
+                        logger.info(f"Image download result: local_path={local_file_path}")
+
+                    except Exception as e:
+                        logger.error(f"Image download failed: {e}", exc_info=True)
+
                 our_msg = Message(
                     msg_id=str(msg.id) if hasattr(msg, 'id') else f"wxpy_{int(msg.create_time.timestamp() if hasattr(msg, 'create_time') else 0)}",
                     sender_id=msg.sender.user_name,
@@ -332,6 +363,10 @@ class WeChatClient:
                     timestamp=msg.create_time.timestamp() if hasattr(msg, 'create_time') else 0,
                     is_sent=is_sent,
                     actual_sender_name=msg.sender.name if not is_sent else None,
+                    file_url=file_url,
+                    file_name=file_name,
+                    file_size=file_size,
+                    local_file_path=local_file_path,
                 )
 
                 # Add to session
@@ -354,6 +389,10 @@ class WeChatClient:
                     sender_name=sender_name,
                     receiver_name=receiver_name,
                     actual_sender_name=our_msg.actual_sender_name,
+                    file_url=file_url,
+                    file_name=file_name,
+                    file_size=file_size,
+                    local_file_path=local_file_path,
                 )
                 self.db.save_session(chat_id, session.unread_count, our_msg.timestamp)
 
