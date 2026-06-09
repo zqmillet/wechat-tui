@@ -118,10 +118,14 @@ class ContactList(Widget):
         height: 1;
         min-height: 1;
         max-height: 1;
-        background: #0d1117;
+        background: #21262d;
         border: none;
-        padding: 0;
+        padding: 0 1;
         color: #c9d1d9;
+    }
+
+    ContactList Input:focus {
+        background: #0d1117;
     }
 
     ContactList ScrollableContainer {

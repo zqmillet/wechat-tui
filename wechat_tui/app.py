@@ -166,14 +166,6 @@ class MainScreen(Screen):
         background: #0d1117;
     }
 
-    MainScreen #chat-header {
-        height: 2;
-        background: #161b22;
-        padding: 0 1;
-        border-bottom: solid #30363d;
-        color: #c9d1d9;
-    }
-
     MainScreen #messages-area {
         height: 1fr;
         background: #0d1117;
@@ -208,7 +200,6 @@ class MainScreen(Screen):
             yield ContactList(id="contact-list")
         # Main chat area
         with Container(id="chat-area"):
-            yield Static("选择联系人开始聊天", id="chat-header")
             with Container(id="messages-area"):
                 yield ChatPanel(id="chat-panel")
             with Container(id="input-area"):
@@ -225,12 +216,6 @@ class MainScreen(Screen):
             self.query_one("#main-status-bar", StatusBar).state = app.state
             self.query_one("#main-status-bar", StatusBar).user_name = app.user_name
             self.query_one("#main-status-bar", StatusBar).message_count = app.message_count
-
-    def _update_chat_header(self, contact: Contact) -> None:
-        """Update chat header with contact name."""
-        header = self.query_one("#chat-header", Static)
-        icon = "👥" if contact.is_chatroom else "👤"
-        header.update(f"{icon} {contact.display_name}")
 
     def action_refresh_contacts(self) -> None:
         """Refresh the contact list."""
@@ -260,9 +245,6 @@ class MainScreen(Screen):
         try:
             self._selected_contact = event.contact
             app = self.app
-
-            # Update header
-            self._update_chat_header(event.contact)
 
             if hasattr(app, "client") and app.client:
                 # 从数据库加载历史消息（通过联系人名字）
@@ -429,6 +411,8 @@ class WeChatApp(App):
     def _switch_to_main(self) -> None:
         """Switch to main screen."""
         self.push_screen(MainScreen())
+        # 显示登录成功消息
+        self.notify(f"登录成功 · {self.user_name}", severity="information")
         if self.client:
             # Get all contacts (friends + groups)
             all_contacts = list(self.client.contact_list.contacts.values())
