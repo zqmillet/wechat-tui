@@ -1,6 +1,7 @@
 """Chat panel widget for displaying messages."""
 
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from rich.text import Text
@@ -13,6 +14,7 @@ from textual.widgets import Button, Static
 
 from ...models.contact import Contact, ContactType
 from ...models.message import ChatSession, Message, MessageType
+from ...utils.image_to_ascii import ImageToAscii
 
 
 class MessageItem(Widget):
@@ -43,6 +45,7 @@ class MessageItem(Widget):
         min-height: 1;
         padding: 1;
         margin: 0;
+        text-wrap: pre;
     }
 
     MessageItem.sent .bubble {
@@ -75,12 +78,38 @@ class MessageItem(Widget):
     MessageItem.system .system-text {
         text-align: center;
     }
+
+    /* Ensure ASCII art displays correctly with monospace */
+    MessageItem .bubble Static {
+        text-wrap: pre;
+    }
     """
 
     def __init__(self, message: Message, contact_name: Optional[str] = None) -> None:
         super().__init__()
         self.message = message
         self.contact_name = contact_name
+        self._ascii_converter = ImageToAscii(width=35)
+
+    def _get_image_content(self) -> str:
+        """Get display content for image messages.
+
+        Returns:
+            Display content string with ASCII art if available
+        """
+        # Check if local file exists
+        if self.message.local_file_path:
+            path = Path(self.message.local_file_path)
+            if path.exists():
+                # Try to convert to ASCII
+                ascii_art = self._ascii_converter.convert(str(path))
+                if ascii_art:
+                    return f"[图片]\n{ascii_art}"
+                else:
+                    return "[图片] (无法显示)"
+
+        # Fallback to placeholder
+        return self.message.display_content
 
     def compose(self) -> ComposeResult:
         """Compose the message item with proper alignment."""
@@ -98,16 +127,22 @@ class MessageItem(Widget):
         # Build message text
         time_str = self.message.display_time
 
+        # Get appropriate content based on message type
+        if self.message.msg_type == MessageType.IMAGE:
+            content = self._get_image_content()
+        else:
+            content = self.message.display_content
+
         if self.message.is_sent:
             # Sent message - right aligned
-            text = f"[{time_str}]\n{self.message.display_content}"
+            text = f"[{time_str}]\n{content}"
             with Horizontal(classes="message-row"):
                 yield Static("", classes="spacer")  # Left spacer pushes bubble right
                 yield Static(text, classes="bubble")
         else:
             # Received message - left aligned
             sender = self.message.actual_sender_name or self.contact_name or "未知"
-            text = f"[{time_str}] {sender}\n{self.message.display_content}"
+            text = f"[{time_str}] {sender}\n{content}"
             with Horizontal(classes="message-row"):
                 yield Static(text, classes="bubble")
                 yield Static("", classes="spacer")  # Right spacer
